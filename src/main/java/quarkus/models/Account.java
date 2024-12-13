@@ -1,5 +1,6 @@
 package quarkus.models;
 
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -9,7 +10,16 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
+@Entity
+@NamedQuery(name = "Accounts.findAll",
+        query = "SELECT a FROM Account a ORDER BY a.accountNumber")
+@NamedQuery(name = "Accounts.findByAccountNumber",
+        query = "SELECT a FROM Account a WHERE a.accountNumber=:accountNumber ORDER BY a.accountNumber")
 public class Account {
+    @Id
+    @SequenceGenerator(name = "accountSequence", sequenceName = "accounts_id_seq", allocationSize = 1, initialValue = 10)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "accountSequence")
+    private Long id;
     private Long accountNumber;
     private Long customerNumber;
     private String customerName;

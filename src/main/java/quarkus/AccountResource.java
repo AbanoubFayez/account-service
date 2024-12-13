@@ -1,6 +1,10 @@
 package quarkus;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
+import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.NotFoundException;
@@ -16,11 +20,15 @@ import quarkus.models.Account;
 
 import java.math.BigDecimal;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Path("/accounts")
 public class AccountResource {
     Set<Account> accounts = new HashSet<>();
+
+    @Inject
+    EntityManager entityManager;
 
     @PostConstruct
     public void setup() {
@@ -34,18 +42,25 @@ public class AccountResource {
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public Set<Account> allAccounts() {
-        return accounts;
+    public List<Account> allAccounts() {
+        return entityManager
+                .createNamedQuery("Accounts.findAll", Account.class)
+                .getResultList();
     }
 
     @GET
     @Path("/{accountNumber}")
     @Produces(MediaType.APPLICATION_JSON)
     public Account getAccount(@PathParam("accountNumber") Long accountNumber) {
-        return accounts.stream()
-                .filter(account -> account.getAccountNumber().equals(accountNumber))
-                .findFirst()
-                .orElseThrow(() -> new NotFoundException("Account with id of " + accountNumber + " does not exist!"));
+        try {
+            return
+                    entityManager
+                            .createNamedQuery("Accounts.findByAccountNumber", Account.class)
+                            .setParameter("accountNumber", accountNumber)
+                            .getSingleResult();
+        } catch (NoResultException e) {
+            throw new NotFoundException("Account with id of " + accountNumber + " does not exist!");
+        }
     }
 
     @PUT
@@ -83,16 +98,14 @@ public class AccountResource {
 
     @POST
     @Path("/{accountNumber}/withdraw/{amount}")
-    public void withdraw(@PathParam("accountNumber") Long accountNumber, @PathParam("amount") BigDecimal amount) {
-        Account account = accounts.stream()
-                .filter(acc -> acc.getAccountNumber().equals(accountNumber))
-                .findFirst()
-                .orElseThrow(() -> new NotFoundException("Account with id of " + accountNumber + " does not exist!"));
+    public Account withdrawl(@PathParam("accountNumber") Long accountNumber, @PathParam("amount") BigDecimal amount) {
+        Account account = getAccount(accountNumber);
 
         if (account.getBalance().compareTo(amount) < 0) {
             throw new WebApplicationException("Insufficient balance!");
         }
         account.withdrawFunds(amount);
+        return account;
     }
 
     @POST
@@ -109,8 +122,9 @@ public class AccountResource {
 
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
+    @Transactional
     public Response create(Account account) {
-        accounts.add(account);
+        entityManager.persist(account);
         return Response.status(201).entity(account).build();
     }
 }
